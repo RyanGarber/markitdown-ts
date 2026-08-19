@@ -1,170 +1,102 @@
-import * as fs from "fs";
-import { JSDOM } from "jsdom";
-import { URL } from "url";
-import { ConverterOptions, ConverterResult, DocumentConverter } from "../types";
+import { decodeText } from "../bytes";
+import { parseHtmlDocument } from "../html-document";
+import type { ConverterOptions, ConverterResult, DocumentConverter } from "../types";
 
 export class YouTubeConverter implements DocumentConverter {
-  async convert(
-    source: string | Buffer,
-    options: ConverterOptions = {}
-  ): Promise<ConverterResult | null> {
-    const fileExtension = options.file_extension || "";
-    if (![".html", ".htm"].includes(fileExtension.toLowerCase())) {
+  async convert(source: Uint8Array, options: ConverterOptions = {}): Promise<ConverterResult> {
+    const extension = options.file_extension?.toLowerCase() ?? "";
+    if (
+      (extension !== ".html" && extension !== ".htm") ||
+      !options.url?.startsWith("https://www.youtube.com/watch?")
+    ) {
       return null;
     }
-    const url = options.url || "";
-    if (!url.startsWith("https://www.youtube.com/watch?")) {
-      return null;
-    }
-    try {
-      const htmlContent =
-        typeof source === "string"
-          ? fs.readFileSync(source, { encoding: "utf-8" })
-          : source.toString("utf-8");
-      return this._convert(htmlContent, url, options);
-    } catch (error) {
-      console.error("YouTube Parsing Error:", error);
-      return null;
-    }
-  }
-  private async _convert(
-    htmlContent: string,
-    url: string,
-    options: ConverterOptions
-  ): Promise<ConverterResult> {
-    const dom = new JSDOM(htmlContent);
-    const doc = dom.window.document;
 
-    const metadata: Record<string, string> = {
-      title: doc.title
-    };
+    const document = parseHtmlDocument(decodeText(source));
+    const metadata: Record<string, string> = { title: document.title };
 
-    doc.querySelectorAll("meta").forEach((meta) => {
-      for (const a of meta.attributes) {
-        const attributeContent = meta.getAttribute("content");
-        if (["itemprop", "property", "name"].includes(a.name) && attributeContent) {
-          // console.log({
-          //   name: a.name,
-          //   value: a.value,
-          //   textContent: a.textContent,
-          //   attributeContent: meta.getAttribute("content")
-          // });
-          metadata[a.value] = attributeContent;
-          break;
-        }
+    document.querySelectorAll("meta").forEach((meta) => {
+      const content = meta.getAttribute("content");
+      const key =
+        meta.getAttribute("itemprop") ?? meta.getAttribute("property") ?? meta.getAttribute("name");
+      if (key && content) {
+        metadata[key] = content;
       }
     });
 
-    // We can also try to read the full description. This is more prone to breaking, since it reaches into the page implementation
     try {
-      for (const script of doc.querySelectorAll("script")) {
-        const content = script.textContent || "";
-        if (content.includes("ytInitialData")) {
-          const lines = content.split(/\r?\n/);
-          const objStart = lines[0].indexOf("{");
-          const objEnd = lines[0].lastIndexOf("}");
-          if (objStart >= 0 && objEnd >= 0) {
-            const data = JSON.parse(lines[0].substring(objStart, objEnd + 1));
-            const attrdesc = this._findKey(data, "attributedDescriptionBodyText");
-            if (attrdesc) {
-              metadata["description"] = attrdesc["content"];
-            }
-          }
-          break;
+      for (const script of document.querySelectorAll("script")) {
+        const content = script.textContent ?? "";
+        if (!content.includes("ytInitialData")) {
+          continue;
         }
+        const start = content.indexOf("{");
+        const end = content.lastIndexOf("}");
+        if (start >= 0 && end > start) {
+          const description = findKey(
+            JSON.parse(content.slice(start, end + 1)),
+            "attributedDescriptionBodyText"
+          );
+          if (isRecord(description) && typeof description.content === "string") {
+            metadata.description = description.content;
+          }
+        }
+        break;
       }
-    } catch (e) {
-      console.warn("Error while parsing Youtube description");
+    } catch {
+      // Meta description remains available when the page implementation changes.
     }
-    let webpageText = "# YouTube\n";
-    const title = this._get(metadata, ["title", "og:title", "name"]);
+
+    const title = first(metadata, ["title", "og:title", "name"]) || document.title || null;
+    const lines = ["# YouTube"];
     if (title) {
-      webpageText += `\n## ${title}\n`;
+      lines.push(`## ${title}`);
     }
-    let stats = "";
-    const views = this._get(metadata, ["interactionCount"]);
-    if (views) {
-      stats += `- **Views:** ${views}\n`;
-    }
-    const keywords = this._get(metadata, ["keywords"]);
-    if (keywords) {
-      stats += `- **Keywords:** ${keywords}\n`;
-    }
-    const runtime = this._get(metadata, ["duration"]);
-    if (runtime) {
-      stats += `- **Runtime:** ${runtime}\n`;
-    }
+
+    const stats: string[] = [];
+    const views = first(metadata, ["interactionCount"]);
+    const keywords = first(metadata, ["keywords"]);
+    const runtime = first(metadata, ["duration"]);
+    if (views) stats.push(`- **Views:** ${views}`);
+    if (keywords) stats.push(`- **Keywords:** ${keywords}`);
+    if (runtime) stats.push(`- **Runtime:** ${runtime}`);
     if (stats.length > 0) {
-      webpageText += `\n### Video Metadata\n${stats}\n`;
+      lines.push(`### Video Metadata\n${stats.join("\n")}`);
     }
-    const description = this._get(metadata, ["description", "og:description"]);
+
+    const description = first(metadata, ["description", "og:description"]);
     if (description) {
-      webpageText += `\n### Description\n${description}\n`;
+      lines.push(`### Description\n${description}`);
     }
-    if (options.enableYoutubeTranscript) {
-      let transcriptText = "";
-      const parsedUrl = new URL(url);
-      const params = parsedUrl.searchParams;
-      const videoId = params.get("v");
-      let ytTranscript;
-      try {
-        ytTranscript = await import("youtube-transcript").then((mod) => mod.YoutubeTranscript);
-      } catch (error) {
-        console.warn(
-          "Optional dependency 'youtube-transcript' is not installed. Run `npm install youtube-transcript` to enable this feature."
-        );
-        return null;
-      }
-      if (videoId) {
-        try {
-          const youtubeTranscriptLanguage = options.youtubeTranscriptLanguage || "en";
-          const transcript = await ytTranscript.fetchTranscript(videoId, {
-            lang: youtubeTranscriptLanguage
-          });
-          transcriptText = transcript.map((part) => part.text).join(" ");
-        } catch (error) {
-          console.warn("Error while extracting the Youtube Transcript", error);
-        }
-      }
-      if (transcriptText) {
-        webpageText += `\n### Transcript\n${transcriptText}\n`;
-      }
-    }
-    const finalTitle = title ? title : doc.title;
-    return { title: finalTitle, markdown: webpageText, text_content: webpageText };
+
+    const markdown = lines.join("\n\n");
+    return { title, markdown, text_content: markdown };
   }
-  private _get(
-    metadata: Record<string, string>,
-    keys: string[],
-    default_value?: string
-  ): string | null {
-    for (const k of keys) {
-      if (metadata[k]) {
-        return metadata[k];
-      }
-    }
-    return default_value || null;
+}
+
+function first(metadata: Record<string, string>, keys: string[]): string | null {
+  for (const key of keys) {
+    if (metadata[key]) return metadata[key];
   }
-  private _findKey(json: any, key: string): any {
-    if (Array.isArray(json)) {
-      for (const elm of json) {
-        const ret = this._findKey(elm, key);
-        if (ret) {
-          return ret;
-        }
-      }
-    } else if (typeof json === "object" && json !== null) {
-      for (const k in json) {
-        if (k === key) {
-          return json[k];
-        } else {
-          const ret = this._findKey(json[k], key);
-          if (ret) {
-            return ret;
-          }
-        }
-      }
+  return null;
+}
+
+function findKey(value: unknown, key: string): unknown {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const match = findKey(item, key);
+      if (match !== undefined) return match;
     }
-    return null;
+  } else if (isRecord(value)) {
+    if (key in value) return value[key];
+    for (const item of Object.values(value)) {
+      const match = findKey(item, key);
+      if (match !== undefined) return match;
+    }
   }
+  return undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

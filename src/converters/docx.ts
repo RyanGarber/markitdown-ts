@@ -1,34 +1,25 @@
-import { ConverterOptions, ConverterResult } from "../types";
-import * as fs from "fs";
+import mammoth from "mammoth";
+import { toArrayBuffer } from "../bytes";
+import type { ConverterOptions, ConverterResult } from "../types";
 import { HtmlConverter } from "./html";
-import Mammoth from "mammoth";
 
 export class DocxConverter extends HtmlConverter {
-  async convert(source: string | Buffer, options: ConverterOptions): Promise<ConverterResult> {
-    const fileExtension = options.file_extension || "";
-    if (![".docx"].includes(fileExtension.toLowerCase())) {
+  async convert(source: Uint8Array, options: ConverterOptions): Promise<ConverterResult> {
+    if (options.file_extension?.toLowerCase() !== ".docx") {
       return null;
     }
 
-    try {
-      let mammothInput: { path: string } | { buffer: Buffer };
-      if (typeof source === "string") {
-        if (!fs.existsSync(source)) {
-          throw new Error("File does'nt exists");
-        }
-        mammothInput = { path: source };
-      } else {
-        mammothInput = { buffer: Buffer.from(source) };
+    const html = await mammoth.convertToHtml(
+      { arrayBuffer: toArrayBuffer(source) },
+      {
+        styleMap: options.styleMap,
+        includeEmbeddedStyleMap: options.includeEmbeddedStyleMap,
+        includeDefaultStyleMap: options.includeDefaultStyleMap,
+        ignoreEmptyParagraphs: options.ignoreEmptyParagraphs,
+        idPrefix: options.idPrefix,
+        transformDocument: options.transformDocument
       }
-
-      let htmlContent = await Mammoth.convertToHtml(mammothInput, {
-        ...options
-      });
-
-      return await this._convert(htmlContent.value);
-    } catch (e) {
-      console.error(e);
-      return null;
-    }
+    );
+    return this.convertHtml(html.value);
   }
 }

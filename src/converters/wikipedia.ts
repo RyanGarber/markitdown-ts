@@ -1,59 +1,29 @@
-import * as fs from "fs";
-import { JSDOM } from "jsdom";
+import { decodeText } from "../bytes";
 import { CustomTurnDown } from "../custom-turndown";
-import { ConverterOptions, ConverterResult, DocumentConverter } from "../types";
+import { parseHtmlDocument } from "../html-document";
+import type { ConverterOptions, ConverterResult, DocumentConverter } from "../types";
 
-const WIKIPEDIA_REGEX = /^https?:\/\/[a-zA-Z]{2,3}\.wikipedia\.org\//;
-const BODY_SELECTOR_QUERY = "div#mw-content-text";
-const TITLE_SELECTOR_QUERY = "span.mw-page-title-main";
+const WIKIPEDIA_URL = /^https?:\/\/[a-z]{2,3}\.wikipedia\.org\//i;
 
 export class WikipediaConverter implements DocumentConverter {
-  async convert(source: string | Buffer, options: ConverterOptions = {}): Promise<ConverterResult> {
-    const fileExtension = options.file_extension || "";
-    if (![".html", ".htm"].includes(fileExtension.toLowerCase())) {
-      return null;
-    }
-    const url = options.url || "";
-    if (!WIKIPEDIA_REGEX.test(url)) {
+  async convert(source: Uint8Array, options: ConverterOptions = {}): Promise<ConverterResult> {
+    const extension = options.file_extension?.toLowerCase() ?? "";
+    if ((extension !== ".html" && extension !== ".htm") || !WIKIPEDIA_URL.test(options.url ?? "")) {
       return null;
     }
 
-    try {
-      const htmlContent =
-        typeof source === "string"
-          ? fs.readFileSync(source, { encoding: "utf-8" })
-          : source.toString("utf-8");
-      return this._convert(htmlContent);
-    } catch (error) {
-      console.error("Wikipedia Parsing Error:", error);
-      return null;
-    }
-  }
-
-  private _convert(htmlContent: string): ConverterResult {
-    const dom = new JSDOM(htmlContent);
-    const doc = dom.window.document;
-
-    doc.querySelectorAll("script, style").forEach((script) => {
-      script.remove();
+    const document = parseHtmlDocument(decodeText(source));
+    document.querySelectorAll("script, style").forEach((element) => {
+      element.remove();
     });
 
-    const bodyElm = doc.querySelector(BODY_SELECTOR_QUERY);
-    const titleElm = doc.querySelector(TITLE_SELECTOR_QUERY);
+    const body = document.querySelector("div#mw-content-text");
+    const pageTitle = document.querySelector("span.mw-page-title-main")?.textContent?.trim();
+    const title = pageTitle || document.title || null;
+    const markdown = body
+      ? `# ${title ?? "Wikipedia"}\n\n${new CustomTurnDown().convertSoup(body)}`
+      : new CustomTurnDown().convertSoup(document);
 
-    let webpageText = "";
-    let mainTitle = doc.title;
-
-    if (bodyElm) {
-      if (titleElm && titleElm.textContent) {
-        mainTitle = titleElm.textContent;
-      }
-      webpageText =
-        `# ${mainTitle}\n\n` + new CustomTurnDown().convert_soup(bodyElm as HTMLElement);
-    } else {
-      webpageText = new CustomTurnDown().convert_soup(doc);
-    }
-
-    return { title: mainTitle, markdown: webpageText, text_content: webpageText };
+    return { title, markdown, text_content: markdown };
   }
 }

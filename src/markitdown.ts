@@ -1,196 +1,176 @@
-import * as mime from "mime-types";
-import path from "path";
-import * as fs from "fs";
-import { ConverterOptions, DocumentConverter, ConverterResult } from "./types";
-import { PlainTextConverter } from "./converters/plain-text";
-import { HtmlConverter } from "./converters/html";
-import { RSSConverter } from "./converters/xml-rss-atom";
-import { WikipediaConverter } from "./converters/wikipedia";
-import { YouTubeConverter } from "./converters/youtube";
-import { IpynbConverter } from "./converters/ipynb";
+import { isBlob, toUint8Array } from "./bytes";
 import { BingSerpConverter } from "./converters/bingserp";
-import { PdfConverter } from "./converters/pdf";
 import { DocxConverter } from "./converters/docx";
+import { HtmlConverter } from "./converters/html";
+import { IpynbConverter } from "./converters/ipynb";
+import { PlainTextConverter } from "./converters/plain-text";
+import { WikipediaConverter } from "./converters/wikipedia";
 import { XlsxConverter } from "./converters/xlsx";
-import { WavConverter } from "./converters/wav";
-import { Mp3Converter } from "./converters/mp3";
-import { ImageConverter } from "./converters/image";
-import { ZipConverter } from "./converters/zip";
+import { RSSConverter } from "./converters/xml-rss-atom";
+import { YouTubeConverter } from "./converters/youtube";
+import { extensionFromMime, extensionFromPathname } from "./mime";
+import type { ByteSource, ConverterOptions, ConverterResult, DocumentConverter } from "./types";
+
+export type ConversionSource = ByteSource | Response | URL | string;
 
 export class MarkItDown {
-  private readonly converters: Array<DocumentConverter> = [];
+  private readonly converters: DocumentConverter[] = [];
 
   constructor() {
-    this.register_converter(new PlainTextConverter());
-    this.register_converter(new HtmlConverter());
-    this.register_converter(new RSSConverter());
-    this.register_converter(new WikipediaConverter());
-    this.register_converter(new YouTubeConverter());
-    this.register_converter(new BingSerpConverter());
-    this.register_converter(new DocxConverter());
-    this.register_converter(new XlsxConverter());
-    this.register_converter(new WavConverter());
-    this.register_converter(new Mp3Converter());
-    this.register_converter(new ImageConverter());
-    this.register_converter(new IpynbConverter());
-    this.register_converter(new PdfConverter());
-    this.register_converter(new ZipConverter());
+    this.registerConverter(new PlainTextConverter());
+    this.registerConverter(new HtmlConverter());
+    this.registerConverter(new RSSConverter());
+    this.registerConverter(new WikipediaConverter());
+    this.registerConverter(new YouTubeConverter());
+    this.registerConverter(new BingSerpConverter());
+    this.registerConverter(new DocxConverter());
+    this.registerConverter(new XlsxConverter());
+    this.registerConverter(new IpynbConverter());
   }
 
-  /**
-   * Converts a source from a file path, URL, or Response object.
-   */
+  /** Convert a URL, response, blob, array buffer, data view, or typed array. */
   async convert(
-    source: string | Response,
+    source: ConversionSource,
     options: ConverterOptions = {}
   ): Promise<ConverterResult> {
-    if (source instanceof Response) {
-      return await this.convert_response(source, options);
-    } else {
-      if (
-        source.startsWith("http://") ||
-        source.startsWith("https://") ||
-        source.startsWith("file://")
-      ) {
-        return await this.convert_url(source, options);
-      } else {
-        return this.convert_local(source, options);
+    if (typeof source === "string" || source instanceof URL) {
+      return this.convertUrl(source.toString(), options);
+    }
+
+    if (isResponse(source)) {
+      return this.convertResponse(source, options);
+    }
+
+    const extensions = new Set<string>();
+    this.addExtension(extensions, options.file_extension);
+
+    if (isBlob(source)) {
+      this.addExtension(extensions, extensionFromMime(source.type));
+      if ("name" in source && typeof source.name === "string") {
+        this.addExtension(extensions, extensionFromPathname(source.name));
       }
-    }
-  }
-
-  /**
-   * Converts a source from an in-memory Buffer.
-   */
-  async convertBuffer(
-    source: Buffer,
-    options: ConverterOptions & { file_extension: string }
-  ): Promise<ConverterResult> {
-    const extensions = new Set<string>([options.file_extension]);
-    return this._convert(source, extensions, options);
-  }
-
-  private async convert_url(
-    source: string,
-    { fetch = globalThis.fetch, ...options }: ConverterOptions
-  ): Promise<ConverterResult> {
-    let response = await fetch(source);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch URL: ${source}, status: ${response.status}`);
-    }
-
-    return await this.convert_response(response, options);
-  }
-
-  private async convert_response(
-    response: Response,
-    options: ConverterOptions
-  ): Promise<ConverterResult> {
-    const ext = options.file_extension;
-    const extensions = ext ? new Set<string>([ext]) : new Set<string>();
-    const contentType = response.headers?.get("content-type")?.split(";")[0];
-    if (!contentType) {
-      throw new Error("Response Content-Type header is missing");
-    }
-
-    const mimeExtension = mime.extension(contentType);
-    if (mimeExtension) {
-      //NOTE: . was missing from the starting of the string which lead to youtube
-      // test to fail as it was not able to find the correct extension i.e .html
-      extensions.add(`.${mimeExtension}`);
-    }
-
-    const content_disposition = response.headers?.get("content-disposition") || "";
-    const fname = content_disposition.match(/filename="([^;]+)"/);
-    if (fname) {
-      extensions.add(path.extname(fname[1]));
-    }
-
-    if (response.url) {
-      const url_ext = path.extname(new URL(response.url).pathname);
-      extensions.add(url_ext);
     }
 
     if (extensions.size === 0) {
       throw new Error(
-        "Could not determine file type. Please provide a `file_extension` in the options."
+        "Could not determine the file type. Provide `file_extension` when converting bytes."
       );
     }
 
-    if (response.body == null) {
-      throw new Error("Response body is empty");
+    return this.convertBytes(await toUint8Array(source), extensions, options);
+  }
+
+  /**
+   * @deprecated Pass the byte source directly to `convert`.
+   */
+  async convertBuffer(
+    source: ByteSource,
+    options: ConverterOptions & { file_extension: string }
+  ): Promise<ConverterResult> {
+    return this.convert(source, options);
+  }
+
+  private async convertUrl(
+    source: string,
+    { fetch: fetchImplementation = globalThis.fetch, ...options }: ConverterOptions
+  ): Promise<ConverterResult> {
+    const url = new URL(source);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error(`Unsupported URL protocol: ${url.protocol}`);
+    }
+    if (!fetchImplementation) {
+      throw new Error("No fetch implementation is available.");
     }
 
-    const buffer = Buffer.from(await response.arrayBuffer());
-    return await this._convert(buffer, extensions, {
+    const response = await fetchImplementation(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch URL: ${url}, status: ${response.status}`);
+    }
+
+    return this.convertResponse(response, { ...options, url: url.toString() });
+  }
+
+  private async convertResponse(
+    response: Response,
+    options: ConverterOptions
+  ): Promise<ConverterResult> {
+    const extensions = new Set<string>();
+    this.addExtension(extensions, options.file_extension);
+    this.addExtension(extensions, extensionFromMime(response.headers.get("content-type")));
+
+    const disposition = response.headers.get("content-disposition") ?? "";
+    const filename = disposition.match(/filename\*?=(?:UTF-8''|["']?)([^;"']+)/i)?.[1];
+    if (filename) {
+      this.addExtension(extensions, extensionFromPathname(decodeURIComponent(filename.trim())));
+    }
+
+    const responseUrl = options.url || response.url;
+    if (responseUrl) {
+      this.addExtension(extensions, extensionFromPathname(new URL(responseUrl).pathname));
+    }
+
+    if (extensions.size === 0) {
+      throw new Error(
+        "Could not determine the file type. Provide `file_extension` or a Content-Type header."
+      );
+    }
+
+    return this.convertBytes(new Uint8Array(await response.arrayBuffer()), extensions, {
       ...options,
-      url: response.url
+      url: responseUrl
     });
   }
 
-  private async convert_local(source: string, options: ConverterOptions): Promise<ConverterResult> {
-    const ext = options.file_extension;
-    const extensions = ext ? new Set<string>(ext) : new Set<string>();
-    if (!fs.existsSync(source)) {
-      throw new Error(`File not found: ${source}`);
-    }
-
-    const extname = path.extname(source);
-    if (extname === "") {
-      throw new Error(`File extension not found: ${source}`);
-    }
-
-    if (!extensions.has(extname)) {
-      extensions.add(extname);
-    }
-
-    return await this._convert(source, extensions, options);
-  }
-
-  private async _convert(
-    source: string | Buffer,
+  private async convertBytes(
+    source: Uint8Array,
     extensions: Set<string>,
-    options: any = {}
+    options: ConverterOptions
   ): Promise<ConverterResult> {
-    let error;
+    let lastError: unknown;
 
-    for (const ext of extensions) {
+    for (const extension of extensions) {
       for (const converter of this.converters) {
-        let res;
         try {
-          const op: ConverterOptions = {
+          const result = await converter.convert(source, {
             ...options,
-            file_extension: ext,
+            file_extension: extension,
             _parent_converters: this.converters
-          };
-          res = await converter.convert(source, op);
-        } catch (e) {
-          error = e;
-        }
-
-        if (res != null) {
-          res.markdown = res.markdown.replace(/(?:\r\n|\r|\n)/g, "\n").trim();
-          res.markdown = res.markdown.replace(/\n{3,}/g, "\n\n");
-
-          return res;
+          });
+          if (result) {
+            result.markdown = result.markdown
+              .replace(/\r\n|\r|\n/g, "\n")
+              .trim()
+              .replace(/\n{3,}/g, "\n\n");
+            result.text_content = result.markdown;
+            return result;
+          }
+        } catch (error) {
+          lastError = error;
         }
       }
     }
 
-    if (error) {
-      throw new Error(
-        `Could not convert ${source} to markdown. While converting the following error occurred: ${error}`
-      );
+    const formats = [...extensions].join(", ");
+    if (lastError) {
+      throw new Error(`Could not convert ${formats} to Markdown: ${String(lastError)}`);
     }
-    throw new Error(
-      `Could not convert ${source} to markdown format. The ${Array.from(extensions).join(
-        ", "
-      )} are not supported.`
+    throw new Error(`Unsupported file type: ${formats}.`);
+  }
+
+  private addExtension(extensions: Set<string>, extension: string | null | undefined): void {
+    if (!extension) {
+      return;
+    }
+    extensions.add(
+      extension.startsWith(".") ? extension.toLowerCase() : `.${extension.toLowerCase()}`
     );
   }
 
-  // NOTE: Inserts the converter at the beginning of the list
-  private register_converter(converter: DocumentConverter) {
+  private registerConverter(converter: DocumentConverter): void {
     this.converters.unshift(converter);
   }
+}
+
+function isResponse(value: unknown): value is Response {
+  return typeof Response !== "undefined" && value instanceof Response;
 }

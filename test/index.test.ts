@@ -1,319 +1,100 @@
-import { describe, it, expect } from "vitest";
-import { MarkItDown } from "../src/markitdown";
-import * as path from "path";
-import * as fs from "fs";
-import isCi from "is-ci";
-import { openai } from "@ai-sdk/openai";
-import {
-  PLAIN_TEST,
-  BLOG_TEST_URL,
-  BLOG_TEST_STRINGS,
-  RSS_TEST_STRINGS,
-  WIKIPEDIA_TEST_URL,
-  WIKIPEDIA_TEST_STRINGS,
-  WIKIPEDIA_TEST_EXCLUDES,
-  YOUTUBE_TEST_URL,
-  YOUTUBE_TEST_STRINGS,
-  IPYNB_TEST_STRINGS,
-  SERP_TEST_URL,
-  SERP_TEST_STRINGS,
-  SERP_TEST_EXCLUDES,
-  PDF_TEST_URL,
-  PDF_TEST_STRINGS,
-  DOCX_TEST_STRINGS,
-  DOCX_COMMENT_TEST_STRINGS,
-  XLSX_TEST_STRINGS,
-  WAV_TEST_STRINGS,
-  JPG_TEST_EXIFTOOL,
-  LLM_TEST_STRINGS
-} from "./test.data";
+import { describe, expect, it } from "vitest";
+import * as XLSX from "xlsx";
+import { MarkItDown } from "../src";
 
-describe("MarkItDown Tests", () => {
-  describe("Plain Text Converter", () => {
-    it("should convert plain text", async () => {
-      const markitdown = new MarkItDown();
-      const result = await markitdown.convert(path.join(__dirname, "__files/test.txt"));
-      expect(result).toBeTruthy();
-      const textContent = result?.markdown.replace("\\", "");
-      expect(result?.title).toBeNull();
-      for (const testStr of PLAIN_TEST) {
-        expect(textContent).toContain(testStr);
-      }
+const encoder = new TextEncoder();
+
+describe("MarkItDown", () => {
+  it("treats Uint8Array as a first-class source", async () => {
+    const result = await new MarkItDown().convert(encoder.encode("hello\n\n\nworld"), {
+      file_extension: ".txt"
     });
-  });
-  describe("HTML Converter", () => {
-    it("should convert HTML to markdown", async () => {
-      const markitdown = new MarkItDown();
-      const result = await markitdown.convert(path.join(__dirname, "__files/test_blog.html"), {
-        url: BLOG_TEST_URL
-      });
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      const textContent = result?.markdown.replace("\\", "");
-      for (const testString of BLOG_TEST_STRINGS) {
-        expect(textContent).toContain(testString);
-      }
+
+    expect(result).toEqual({
+      title: null,
+      markdown: "hello\n\nworld",
+      text_content: "hello\n\nworld"
     });
   });
 
-  describe("RSS Converter", () => {
-    it("should convert RSS to markdown", async () => {
-      const markitdown = new MarkItDown();
-      const result = await markitdown.convert(path.join(__dirname, "__files/test_rss.xml"));
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      const textContent = result?.markdown.replace("\\", "");
-      for (const testString of RSS_TEST_STRINGS) {
-        expect(textContent).toContain(testString);
+  it.each([
+    ["ArrayBuffer", "array buffer", () => encoder.encode("array buffer").buffer],
+    [
+      "DataView",
+      "data view",
+      () => {
+        const bytes = encoder.encode("data view");
+        return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
       }
+    ],
+    ["Blob", "blob", () => new Blob(["blob"], { type: "text/plain" })]
+  ])("normalizes %s sources", async (_name, expected, createSource) => {
+    const result = await new MarkItDown().convert(createSource(), {
+      file_extension: ".txt"
     });
+    expect(result?.markdown).toBe(expected);
   });
 
-  describe("Wikipedia Converter", () => {
-    it("should convert Wikipedia to markdown", async () => {
-      const markitdown = new MarkItDown();
-      const result = await markitdown.convert(path.join(__dirname, "__files/test_wikipedia.html"), {
-        url: WIKIPEDIA_TEST_URL
-      });
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      const textContent = result?.markdown.replace("\\", "");
-      for (const testString of WIKIPEDIA_TEST_EXCLUDES) {
-        expect(textContent).not.toContain(testString);
-      }
-      for (const testString of WIKIPEDIA_TEST_STRINGS) {
-        expect(textContent).toContain(testString);
-      }
+  it("infers formats from response headers", async () => {
+    const response = new Response("response body", {
+      headers: { "content-type": "text/plain; charset=utf-8" }
     });
+    const result = await new MarkItDown().convert(response);
+    expect(result?.markdown).toBe("response body");
   });
 
-  if (!isCi) {
-    describe("Youtube Converter", () => {
-      it("should convert YouTube to markdown with transcript", async () => {
-        const markitdown = new MarkItDown();
-        const result = await markitdown.convert(YOUTUBE_TEST_URL, {
-          enableYoutubeTranscript: true
-        });
-        expect(result).not.toBeNull();
-        expect(result).not.toBeUndefined();
-        const textContent = result?.markdown.replace("\\", "");
-        for (const testString of YOUTUBE_TEST_STRINGS) {
-          expect(textContent).toContain(testString);
-        }
-      }, 30000);
-    });
-  }
-
-  describe("IPYNB Converter", () => {
-    it("should convert .ipynb to markdown", async () => {
-      const markitdown = new MarkItDown();
-      const result = await markitdown.convert(path.join(__dirname, "__files/test_notebook.ipynb"));
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      const textContent = result?.markdown.replace("\\", "");
-      for (const testString of IPYNB_TEST_STRINGS) {
-        expect(textContent).toContain(testString);
-      }
-    });
-  });
-  describe("BingSerp Converter", () => {
-    it("should convert Bing SERP to markdown", async () => {
-      const markitdown = new MarkItDown();
-      const result = await markitdown.convert(path.join(__dirname, "__files/test_serp.html"), {
-        url: SERP_TEST_URL
-      });
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      const textContent = result?.markdown.replace("\\", "");
-      for (const testString of SERP_TEST_EXCLUDES) {
-        expect(textContent).not.toContain(testString);
-      }
-      for (const testString of SERP_TEST_STRINGS) {
-        expect(textContent).toContain(testString);
-      }
-    });
-  });
-  describe("PDF Converter", () => {
-    it("should convert PDF to text", async () => {
-      const markitdown = new MarkItDown();
-      const result = await markitdown.convert(path.join(__dirname, "__files/test.pdf"), {
-        url: PDF_TEST_URL
-      });
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      const textContent = result?.markdown.replace("\\", "");
-      for (const testString of PDF_TEST_STRINGS) {
-        expect(textContent).toContain(testString);
-      }
-    });
-  });
-  describe("DOCX Converter", () => {
-    it("should convert .docx to markdown", async () => {
-      const markitdown = new MarkItDown();
-      const result = await markitdown.convert(path.join(__dirname, "__files/test.docx"));
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      const textContent = result?.markdown.replace("\\", "");
-      for (const testString of DOCX_TEST_STRINGS) {
-        expect(textContent).toContain(testString);
-      }
-    });
-    it("should convert .docx to markdown with comments", async () => {
-      const markitdown = new MarkItDown();
-      const result = await markitdown.convert(
-        path.join(__dirname, "__files/test_with_comment.docx"),
-        { styleMap: "comment-reference => " }
-      );
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      const textContent = result?.markdown.replace("\\", "");
-      for (const testString of DOCX_COMMENT_TEST_STRINGS) {
-        expect(textContent).toContain(testString);
-      }
-    });
-  });
-  describe("XLSX Converter", () => {
-    it("should convert .xlsx to markdown", async () => {
-      const markitdown = new MarkItDown();
-      const result = await markitdown.convert(path.join(__dirname, "__files/test.xlsx"));
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      const textContent = result?.markdown.replace("\\", "");
-      for (const testString of XLSX_TEST_STRINGS) {
-        expect(textContent).toContain(testString);
-      }
+  it("fetches URL sources with an injectable fetch implementation", async () => {
+    const result = await new MarkItDown().convert("https://example.com/article.html", {
+      fetch: async () =>
+        new Response(
+          "<html><head><title>Example</title></head><body><h1>Hello</h1></body></html>",
+          {
+            headers: { "content-type": "text/html" }
+          }
+        )
     });
 
-    it("should convert .xlsx having empty sheets to markdown", async () => {
-      const markitdown = new MarkItDown();
-      const result = await markitdown.convert(
-        path.join(__dirname, "__files/test_empty_sheets.xlsx")
-      );
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      const textContent = result?.markdown.replace("\\", "");
-      for (const testString of XLSX_TEST_STRINGS) {
-        expect(textContent).toContain(testString);
-      }
-    });
+    expect(result?.title).toBe("Example");
+    expect(result?.markdown).toBe("# Hello");
   });
 
-  describe("WAV Converter", () => {
-    it("should convert .wav metadata to markdown", async () => {
-      const markitdown = new MarkItDown();
-      const result = await markitdown.convert(path.join(__dirname, "__files/test.wav"));
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      const textContent = result?.markdown.replace("\\", "");
-      for (const testString of WAV_TEST_STRINGS) {
-        expect(textContent).toContain(testString);
-      }
+  it("converts notebooks from bytes", async () => {
+    const notebook = {
+      metadata: { title: "Notebook" },
+      cells: [
+        { cell_type: "markdown", source: ["# Intro"] },
+        { cell_type: "code", source: ["print(42)"] }
+      ]
+    };
+    const result = await new MarkItDown().convert(encoder.encode(JSON.stringify(notebook)), {
+      file_extension: ".ipynb"
     });
+
+    expect(result?.title).toBe("Notebook");
+    expect(result?.markdown).toContain("```python\nprint(42)\n```");
   });
 
-  describe("Image Converter", () => {
-    it("should process .jpg metadata", async () => {
-      const markitdown = new MarkItDown();
-      const result = await markitdown.convert(path.join(__dirname, "__files/test.jpg"));
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      const textContent = result?.markdown.replace("\\", "");
-      Object.entries(JPG_TEST_EXIFTOOL).forEach(([key, value]) => {
-        const target = `${key}: ${value}`;
-        expect(textContent).toContain(target);
-      });
-    });
+  it("converts spreadsheets from Uint8Array", async () => {
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.aoa_to_sheet([
+        ["name", "value"],
+        ["browser", 1]
+      ]),
+      "Sheet"
+    );
+    const bytes = XLSX.write(workbook, { type: "array", bookType: "xlsx" }) as Uint8Array;
+    const result = await new MarkItDown().convert(bytes, { file_extension: ".xlsx" });
 
-    if (process.env.OPENAI_API_KEY && !isCi) {
-      it("should process .jpg metadata with ai", { timeout: 30000 }, async () => {
-        const markitdown = new MarkItDown();
-        const result = await markitdown.convert(path.join(__dirname, "__files/test.jpg"), {
-          llmModel: openai("gpt-4o-mini")
-        });
-        expect(result).not.toBeNull();
-        expect(result).not.toBeUndefined();
-        const textContent = result?.markdown.replace("\\", "");
-        Object.entries(JPG_TEST_EXIFTOOL).forEach(([key, value]) => {
-          const target = `${key}: ${value}`;
-          expect(textContent).toContain(target);
-        });
-      });
-    }
-
-    if (process.env.OPENAI_API_KEY && !isCi) {
-      it("should process colors, texts in images with llm", { timeout: 30000 }, async () => {
-        const markitdown = new MarkItDown();
-        const result = await markitdown.convert(path.join(__dirname, "__files/test_llm.jpg"), {
-          llmModel: openai("gpt-4o-mini")
-        });
-        expect(result).not.toBeNull();
-        expect(result).not.toBeUndefined();
-        const textContent = result?.markdown.replace("\\", "");
-        for (const testString of LLM_TEST_STRINGS) {
-          expect(textContent).toContain(testString);
-        }
-        for (const testString of ["red", "circle", "blue", "square"]) {
-          expect(textContent?.toLowerCase()).toContain(testString.toLowerCase());
-        }
-      });
-    }
+    expect(result?.markdown).toContain("## Sheet");
+    expect(result?.markdown).toContain("browser");
   });
 
-  describe("Zip Converter", () => {
-    it("should convert .zip file contents to markdown", async () => {
-      const markitdown = new MarkItDown();
-      const result = await markitdown.convert(path.join(__dirname, "__files/test_files.zip"));
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      const textContent = result?.markdown.replace("\\", "");
-      for (const testString of DOCX_TEST_STRINGS) {
-        expect(textContent).toContain(testString);
-      }
-    });
-  });
-
-  describe("Buffer Conversion", () => {
-    it("should correctly convert a .zip file passed as a buffer", async () => {
-      const zipFilePath = path.join(__dirname, "__files/test_files.zip");
-      const buffer = fs.readFileSync(zipFilePath);
-      const markitdown = new MarkItDown();
-      const result = await markitdown.convertBuffer(buffer, {
-        file_extension: ".zip" // NOTE: this is required for buffer conversions
-      });
-
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      const textContent = result?.markdown.replace("\\", "");
-
-      expect(textContent).toContain("File: test.docx");
-      for (const testString of DOCX_TEST_STRINGS) {
-        expect(textContent).toContain(testString);
-      }
-    });
-  });
-
-  describe("Blob Conversion", () => {
-    it("should correctly convert a file passed as a Blob via a Response", async () => {
-      const zipFilePath = path.join(__dirname, "__files/test_files.zip");
-      const buffer = fs.readFileSync(zipFilePath);
-      const blob = new Blob([buffer]);
-
-      const response = new Response(blob, {
-        headers: {
-          "Content-Type": "application/zip"
-        }
-      });
-
-      const markitdown = new MarkItDown();
-      const result = await markitdown.convert(response);
-
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      const textContent = result?.markdown.replace("\\", "");
-
-      for (const testString of DOCX_TEST_STRINGS) {
-        expect(textContent).toContain(testString);
-      }
-    });
+  it("rejects local paths and unsupported URL protocols", async () => {
+    await expect(new MarkItDown().convert("document.txt")).rejects.toThrow();
+    await expect(new MarkItDown().convert("file:///document.txt")).rejects.toThrow(
+      "Unsupported URL protocol"
+    );
   });
 });

@@ -1,40 +1,29 @@
-import { ConverterOptions, ConverterResult } from "../types";
-import { HtmlConverter } from "./html";
-import * as fs from "fs";
 import * as XLSX from "xlsx";
+import type { ConverterOptions, ConverterResult } from "../types";
+import { HtmlConverter } from "./html";
 
 export class XlsxConverter extends HtmlConverter {
-  async convert(source: string | Buffer, options: ConverterOptions): Promise<ConverterResult> {
-    const extension = options.file_extension || "";
-    if (![".xlsx"].includes(extension.toLowerCase())) {
+  async convert(source: Uint8Array, options: ConverterOptions): Promise<ConverterResult> {
+    if (options.file_extension?.toLowerCase() !== ".xlsx") {
       return null;
     }
 
-    try {
-      let workbook: XLSX.WorkBook;
-      if (typeof source === "string") {
-        if (!fs.existsSync(source)) {
-          throw new Error("File does'nt exists");
-        }
-        workbook = XLSX.readFile(source);
-      } else {
-        workbook = XLSX.read(source, { type: "buffer" });
-      }
+    const workbook = XLSX.read(source, { type: "array" });
+    const sections: string[] = [];
 
-      let mdContent = "";
-
-      for (const sheetName of workbook.SheetNames) {
-        const sheet = workbook.Sheets[sheetName];
-        if (sheet["!ref"]) {
-          mdContent += `## ${sheetName}\n`;
-          let htmlContent = XLSX.utils.sheet_to_html(sheet);
-          mdContent += (await this._convert(htmlContent))?.markdown.trim() + "\n\n";
-        }
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      if (sheet?.["!ref"]) {
+        const result = await this.convertHtml(XLSX.utils.sheet_to_html(sheet));
+        sections.push(`## ${sheetName}\n${result?.markdown.trim() ?? ""}`);
       }
-      return { title: workbook?.Props?.Title || "Untitled", markdown: mdContent, text_content: mdContent };
-    } catch (e) {
-      console.error(e);
-      return null;
     }
+
+    const markdown = sections.join("\n\n");
+    return {
+      title: workbook.Props?.Title || "Untitled",
+      markdown,
+      text_content: markdown
+    };
   }
 }

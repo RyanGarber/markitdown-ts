@@ -1,58 +1,43 @@
-import { ConverterOptions, ConverterResult, DocumentConverter } from "../types";
-import * as fs from "fs";
+import { decodeText } from "../bytes";
+import type { ConverterOptions, ConverterResult, DocumentConverter } from "../types";
+
+type NotebookCell = {
+  cell_type?: string;
+  source?: string[];
+};
+
+type Notebook = {
+  cells?: NotebookCell[];
+  metadata?: { title?: string };
+};
 
 export class IpynbConverter implements DocumentConverter {
-  async convert(
-    source: string | Buffer,
-    options: ConverterOptions = {}
-  ): Promise<ConverterResult | null> {
-    const fileExtension = options.file_extension || "";
-    if (fileExtension.toLowerCase() !== ".ipynb") {
+  async convert(source: Uint8Array, options: ConverterOptions = {}): Promise<ConverterResult> {
+    if (options.file_extension?.toLowerCase() !== ".ipynb") {
       return null;
     }
-    try {
-      const contentStirng =
-        typeof source === "string"
-          ? fs.readFileSync(source, { encoding: "utf-8" })
-          : source.toString("utf-8");
-      const notebookContent = JSON.parse(contentStirng);
-      return this._convert(notebookContent);
-    } catch (error) {
-      console.error("Error converting .ipynb file:", error);
-      return null;
-    }
-  }
 
-  private _convert(notebookContent: any): ConverterResult {
-    try {
-      const mdOutput: string[] = [];
-      let title: string | null = null;
-      for (const cell of notebookContent.cells || []) {
-        const cellType = cell.cell_type || "";
-        const sourceLines: string[] = cell.source || [];
+    const notebook = JSON.parse(decodeText(source)) as Notebook;
+    const output: string[] = [];
+    let title: string | null = notebook.metadata?.title ?? null;
 
-        if (cellType === "markdown") {
-          mdOutput.push(sourceLines.join(""));
-          if (!title) {
-            for (const line of sourceLines) {
-              if (line.startsWith("# ")) {
-                title = line.substring(line.indexOf("# ") + 2).trim();
-                break;
-              }
-            }
-          }
-        } else if (cellType === "code") {
-          mdOutput.push(`\`\`\`python\n${sourceLines.join("")}\n\`\`\``);
-        } else if (cellType === "raw") {
-          mdOutput.push(`\`\`\`\n${sourceLines.join("")}\n\`\`\``);
-        }
+    for (const cell of notebook.cells ?? []) {
+      const lines = cell.source ?? [];
+      if (cell.cell_type === "markdown") {
+        output.push(lines.join(""));
+        title ??=
+          lines
+            .find((line) => line.startsWith("# "))
+            ?.slice(2)
+            .trim() ?? null;
+      } else if (cell.cell_type === "code") {
+        output.push(`\`\`\`python\n${lines.join("")}\n\`\`\``);
+      } else if (cell.cell_type === "raw") {
+        output.push(`\`\`\`\n${lines.join("")}\n\`\`\``);
       }
-      const mdText = mdOutput.join("\n\n");
-      title = notebookContent.metadata?.title || title;
-      return { title: title, markdown: mdText, text_content: mdText };
-    } catch (e) {
-      console.error("Error converting .ipynb file:", e);
-      throw new Error(`Error converting .ipynb file: ${e}`);
     }
+
+    const markdown = output.join("\n\n");
+    return { title, markdown, text_content: markdown };
   }
 }

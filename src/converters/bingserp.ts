@@ -1,82 +1,79 @@
-import { ConverterOptions, ConverterResult, DocumentConverter } from "../types";
-import * as fs from "fs";
-import { JSDOM } from "jsdom";
-import { URL, URLSearchParams } from "url";
+import { decodeText } from "../bytes";
 import { CustomTurnDown } from "../custom-turndown";
+import { parseHtmlDocument } from "../html-document";
+import type { ConverterOptions, ConverterResult, DocumentConverter } from "../types";
+
+const BING_SEARCH_URL = /^https:\/\/www\.bing\.com\/search\?q=/i;
+const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 export class BingSerpConverter implements DocumentConverter {
-  async convert(
-    source: string | Buffer,
-    options: ConverterOptions = {}
-  ): Promise<ConverterResult | null> {
-    const fileExtension = options.file_extension || "";
-    if (![".html", ".htm"].includes(fileExtension.toLowerCase())) {
-      return null;
-    }
-    const url = options.url || "";
-    if (!/^https:\/\/www\.bing\.com\/search\?q=/.test(url)) {
+  async convert(source: Uint8Array, options: ConverterOptions = {}): Promise<ConverterResult> {
+    const extension = options.file_extension?.toLowerCase() ?? "";
+    const url = options.url ?? "";
+    if ((extension !== ".html" && extension !== ".htm") || !BING_SEARCH_URL.test(url)) {
       return null;
     }
 
-    try {
-      const htmlContent =
-        typeof source === "string"
-          ? fs.readFileSync(source, { encoding: "utf-8" })
-          : Buffer.from(source).toString("utf-8");
-      return this._convert(htmlContent, url);
-    } catch (error) {
-      console.error("Bing SERP Parsing Error:", error);
-      return null;
-    }
-  }
-  private _convert(htmlContent: string, url: string): ConverterResult {
-    const dom = new JSDOM(htmlContent);
-    const doc = dom.window.document;
-    const parsedParams = new URL(url).searchParams;
-    const query = parsedParams.get("q") || "";
+    const document = parseHtmlDocument(decodeText(source));
+    const query = new URL(url).searchParams.get("q") ?? "";
 
-    doc.querySelectorAll(".tptt").forEach((tptt) => {
-      if (tptt.textContent) {
-        tptt.textContent += " ";
+    document.querySelectorAll(".tptt").forEach((element) => {
+      if (element.textContent) {
+        element.textContent += " ";
       }
     });
-    doc.querySelectorAll(".algoSlug_icon").forEach((slug) => {
-      slug.remove();
+    document.querySelectorAll(".algoSlug_icon").forEach((element) => {
+      element.remove();
     });
 
-    const markdownify = new CustomTurnDown();
-    const results: string[] = [];
-    doc.querySelectorAll(".b_algo").forEach((result) => {
-      result.querySelectorAll("a[href]").forEach((a) => {
+    const turndown = new CustomTurnDown();
+    const results = [...document.querySelectorAll(".b_algo")].map((result) => {
+      result.querySelectorAll("a[href]").forEach((anchor) => {
+        const href = anchor.getAttribute("href");
+        if (!href) {
+          return;
+        }
         try {
-          const parsedHref = new URL(a.getAttribute("href")!);
-          const params = parsedHref.searchParams;
-          const u = params.get("u");
-          if (u) {
-            const decoded = this._decodeBase64Url(u);
-            a.setAttribute("href", decoded);
+          const encoded = new URL(href, url).searchParams.get("u");
+          if (encoded) {
+            anchor.setAttribute("href", decodeBingUrl(encoded));
           }
-        } catch (e) {}
+        } catch {
+          // Preserve malformed links as they appeared in the source document.
+        }
       });
-      const mdResult = markdownify.convert_soup(result as HTMLElement).trim();
-      const lines = mdResult
+
+      return turndown
+        .convertSoup(result)
         .split(/\n+/)
         .map((line) => line.trim())
-        .filter((line) => line.length > 0);
-      results.push(lines.join("\n"));
+        .filter(Boolean)
+        .join("\n");
     });
-    const webpageText = `## A Bing search for '${query}' found the following results:\n\n${results.join("\n\n")}`;
-    return { title: doc.title, markdown: webpageText, text_content: webpageText };
-  }
 
-  private _decodeBase64Url(encodedUrl: string): string {
-    let u = encodedUrl.slice(2).trim() + "==";
-    try {
-      const decoded = Buffer.from(u, "base64").toString("utf-8");
-      return decoded;
-    } catch (error) {
-      console.error("Error decoding Base64URL:", error);
-      return encodedUrl;
+    const markdown = `## A Bing search for '${query}' found the following results:\n\n${results.join("\n\n")}`;
+    return { title: document.title || null, markdown, text_content: markdown };
+  }
+}
+
+function decodeBingUrl(encoded: string): string {
+  const input = encoded.slice(2).replace(/-/g, "+").replace(/_/g, "/").replace(/=+$/, "");
+  const bytes: number[] = [];
+  let bits = 0;
+  let bitCount = 0;
+
+  for (const character of input) {
+    const value = BASE64_ALPHABET.indexOf(character);
+    if (value < 0) {
+      return encoded;
+    }
+    bits = (bits << 6) | value;
+    bitCount += 6;
+    if (bitCount >= 8) {
+      bitCount -= 8;
+      bytes.push((bits >> bitCount) & 0xff);
     }
   }
+
+  return new TextDecoder().decode(new Uint8Array(bytes));
 }

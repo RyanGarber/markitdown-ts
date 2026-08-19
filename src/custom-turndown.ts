@@ -1,53 +1,38 @@
-import TurndownService from "turndown";
 import turndownPluginGfm from "@joplin/turndown-plugin-gfm";
+import TurndownService from "turndown";
 
 export class CustomTurnDown {
-  convert_soup(doc: string | TurndownService.Node): string {
-    let turnDownService = new TurndownService({
-      headingStyle: "atx"
-    });
-    turnDownService.use(turndownPluginGfm.gfm);
+  convertSoup(document: string | Node): string {
+    const service = new TurndownService({ headingStyle: "atx" });
+    service.use(turndownPluginGfm.gfm);
 
-    turnDownService.addRule("anchor tags", {
+    service.addRule("anchor tags", {
       filter: ["a"],
-      replacement: function (content, node) {
-        if (content === "") {
-          return "";
-        }
+      replacement(content, node) {
+        if (!content) return "";
 
-        let prefix = "";
-        let suffix = "";
-        if (content && content[0] === " ") {
-          prefix = " ";
-        }
-        if (content && content[content.length - 1] === " ") {
-          suffix = " ";
-        }
+        const prefix = content.startsWith(" ") ? " " : "";
+        const suffix = content.endsWith(" ") ? " " : "";
+        const text = content.trim().replace(/\n\n.*/g, "");
+        if (!text) return "";
 
-        //NOTE:replace all the characters after \n\n with empty string if its present
-        let text = content.trim().replace(/\n\n.*/g, "");
-        if (text === "") {
-          return "";
-        }
+        const element = node as unknown as Element;
+        const href = element.getAttribute("href");
+        let title = element.getAttribute("title") ?? "";
+        if (!href) return `${prefix}${text}${suffix}`;
 
-        // NOTE: Ignore the type error for getAttribute and title call
-        // @ts-ignore
-        let href = node.getAttribute("href");
-        // @ts-ignore
-        let title = node.title;
-
-        if (href) {
-          try {
-            let parsed_url = new URL(href);
-            if (!["https:", "http:", "file:"].includes(parsed_url.protocol)) {
-              return `${prefix}${text}${suffix}`;
-            }
-            // NOTE: Some Tests were failing if the href was encoded
-            // href = encodeURIComponent(parsed_url.pathname);
-          } catch (e) {
-            if (!/^https?:|^file:/.test(href)) {
-              return `${prefix}[${text}](${href} "${title}")${suffix}`;
-            }
+        try {
+          const url = new URL(href);
+          if (url.protocol !== "https:" && url.protocol !== "http:") {
+            return `${prefix}${text}${suffix}`;
+          }
+        } catch {
+          if (
+            !href.startsWith("/") &&
+            !href.startsWith("#") &&
+            !href.startsWith("./") &&
+            !href.startsWith("../")
+          ) {
             return `${prefix}${text}${suffix}`;
           }
         }
@@ -55,43 +40,25 @@ export class CustomTurnDown {
         if (text.replace(/\\_/g, "_") === href && !title) {
           return `<${href}>`;
         }
-
-        if (!title && href) {
-          title = href;
-        }
-
-        let title_part = title ? ` "${title}"` : "";
-
-        return `${prefix}[${text}](${href}${title_part})${suffix}`;
+        if (!title) title = href;
+        return `${prefix}[${text}](${href}${title ? ` "${title}"` : ""})${suffix}`;
       }
     });
 
-    turnDownService.addRule("img tags", {
+    service.addRule("img tags", {
       filter: ["img"],
-      replacement: function (_, node) {
-        if (!node || node.nodeName !== "IMG") {
-          return "";
+      replacement(_content, node) {
+        const element = node as unknown as Element;
+        const alt = element.getAttribute("alt") ?? "";
+        let source = element.getAttribute("src") ?? "";
+        const title = element.getAttribute("title");
+        if (source.startsWith("data:")) {
+          source = `${source.split(",", 1)[0]}...`;
         }
-
-        // NOTE: Ignore the type error for getAttribute calls
-        // @ts-ignore
-        let alt = node.getAttribute("alt") || "";
-        // @ts-ignore
-        let src = node.getAttribute("src") || "";
-        // @ts-ignore
-        let title = node.getAttribute("title") || "";
-
-        let titlePart = title ? ` "${title}"` : "";
-
-        if (src.startsWith("data:")) {
-          src = src.split(",")[0] + "...";
-        }
-
-        return `![${alt}](${src}${titlePart})`;
+        return `![${alt}](${source}${title ? ` "${title}"` : ""})`;
       }
     });
 
-    let markdown = turnDownService.turndown(doc);
-    return markdown;
+    return service.turndown(document as TurndownService.Node);
   }
 }

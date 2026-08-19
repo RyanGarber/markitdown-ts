@@ -1,78 +1,79 @@
 {
-  "name": "markitdown-ts",
-  "version": "0.0.10",
-  "description": "",
-  "keywords": [],
-  "homepage": "https://github.com/dead8309/markitdown-ts#readme",
+  "name": "@ryangarber/markitdown-ts",
+  "version": "0.1.0",
+  "description": "Convert various file formats to Markdown for indexing, text analysis, and other applications that benefit from structured text. Node-free fork of the TypeScript fork of the original Python library.",
+  "keywords": [
+    "markdown",
+    "converter",
+    "browser",
+    "uint8array",
+    "docx",
+    "xlsx"
+  ],
+  "homepage": "https://github.com/ryangarber/markitdown-ts#readme",
   "bugs": {
-    "url": "https://github.com/dead8309/markitdown-ts/issues"
+    "url": "https://github.com/ryangarber/markitdown-ts/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dead8309/markitdown-ts.git"
+    "url": "https://github.com/ryangarber/markitdown-ts.git"
   },
   "license": "MIT",
-  "author": "Vaibhav Raj",
+  "author": "Ryan Garber",
+  "contributors": [
+    "Vaibhav Raj"
+  ],
+  "type": "module",
   "sideEffects": false,
   "exports": {
     ".": {
-      "require": "./dist/index.cjs",
-      "import": "./dist/index.mjs",
-      "types": "./dist/index.d.ts"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
-  "main": "dist/index.cjs",
-  "module": "dist/index.mjs",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
-    "build": "unbuild",
-    "format": "prettier --write src/**/*.ts",
+    "build": "tsdown",
+    "check": "biome check . && tsc --noEmit",
+    "check:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "prepublishOnly": "npm run check && npm test -- --run && npm run build",
     "release": "bumpp --commit --push --tag && pnpm publish",
-    "preversion": "pnpm typecheck && pnpm build",
     "test": "vitest",
     "typecheck": "tsc --noEmit"
   },
-  "devDependencies": {
-    "@ai-sdk/openai": "^3.0.2",
-    "@types/jsdom": "^21.1.7",
-    "@types/mime-types": "^2.1.4",
-    "@types/node": "^22.10.2",
-    "@types/turndown": "^5.0.5",
-    "@types/unzipper": "^0.10.10",
-    "bumpp": "^9.9.1",
-    "is-ci": "^4.1.0",
-    "prettier": "^3.4.2",
-    "typescript": "^5.7.2",
-    "unbuild": "^3.0.1",
-    "vite": "^6.0.4",
-    "vitest": "^2.1.8",
-    "zod": "^4.1.8"
+  "publishConfig": {
+    "access": "public"
   },
-  "packageManager": "pnpm@9.15.1",
   "dependencies": {
-    "@joplin/turndown-plugin-gfm": "^1.0.60",
-    "@xmldom/xmldom": "^0.9.6",
-    "ai": "^6.0.6",
-    "jsdom": "^25.0.1",
-    "mammoth": "^1.8.0",
-    "mime-types": "^2.1.35",
-    "pdf-parse": "^2.4.5",
-    "turndown": "^7.2.0",
-    "xlsx": "^0.18.5"
+    "@joplin/turndown-plugin-gfm": "^1.0.67",
+    "@xmldom/xmldom": "^0.9.11",
+    "linkedom": "^0.18.13",
+    "mammoth": "^1.12.1",
+    "turndown": "^7.2.4",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
-  "peerDependencies": {
-    "unzipper": "^0.12.3",
-    "youtube-transcript": "^1.2.1"
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.9",
+    "@types/turndown": "^5.0.6",
+    "bumpp": "^12.2.1",
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   },
-  "peerDependenciesMeta": {
-    "youtube-transcript": {
-      "optional": true
-    },
-    "unzipper": {
-      "optional": true
-    }
-  }
+  "packageManager": "pnpm@11.22.0+sha512.1ff870c4c6133dfd88fb2afc46dd13d47f09c9794b438c6fdb47ca98caf3bc16381ee0be93a091b8e3824cf01f889f46d7d9e20910fb0be1ab0fb5baa80dd621"
 }
