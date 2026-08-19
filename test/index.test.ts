@@ -1,6 +1,6 @@
+import { Workbook } from "exceljs";
 import { zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
-import * as XLSX from "xlsx";
 import { MarkItDown } from "../src";
 
 const encoder = new TextEncoder();
@@ -95,16 +95,11 @@ describe("MarkItDown", () => {
   });
 
   it("converts spreadsheets from Uint8Array", async () => {
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(
-      workbook,
-      XLSX.utils.aoa_to_sheet([
-        ["name", "value"],
-        ["browser", 1]
-      ]),
-      "Sheet"
-    );
-    const bytes = XLSX.write(workbook, { type: "array", bookType: "xlsx" }) as Uint8Array;
+    const workbook = new Workbook();
+    const sheet = workbook.addWorksheet("Sheet");
+    sheet.addRow(["name", "value"]);
+    sheet.addRow(["browser", 1]);
+    const bytes = new Uint8Array(await workbook.xlsx.writeBuffer());
     const result = await new MarkItDown().convert(bytes, { file_extension: ".xlsx" });
 
     expect(result?.markdown).toContain("## Sheet");
