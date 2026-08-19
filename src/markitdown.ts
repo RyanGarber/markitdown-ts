@@ -46,7 +46,7 @@ export class MarkItDown {
     }
 
     const extensions = new Set<string>();
-    this.addExtension(extensions, options.file_extension);
+    this.addExtension(extensions, options.file_extension?.replace(/^\./, ""));
 
     if (isBlob(source)) {
       this.addExtension(extensions, extensionFromMime(source.type));
@@ -149,6 +149,9 @@ export class MarkItDown {
             return result;
           }
         } catch (error) {
+          if (options.debug) {
+            console.error("Converter threw error:", error);
+          }
           lastError = error;
         }
       }

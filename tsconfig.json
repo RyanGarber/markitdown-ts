@@ -13,6 +13,7 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
+    "types": ["node"],
     "noEmit": true
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "tsup.config.ts"],

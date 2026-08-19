@@ -58,21 +58,26 @@
     "test": "vitest",
     "typecheck": "tsc --noEmit"
   },
+  "bin": {
+    "markitdown": "./dist/cli.mjs"
+  },
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
+    "@commander-js/extra-typings": "^15.0.0",
     "@joplin/turndown-plugin-gfm": "^1.0.67",
     "@xmldom/xmldom": "^0.9.11",
+    "exceljs": "^4.4.0",
     "fflate": "^0.8.3",
     "linkedom": "^0.18.13",
     "mammoth": "^1.12.1",
     "turndown": "^7.2.4",
-    "unpdf": "^1.8.1",
-    "exceljs": "^4.4.0"
+    "unpdf": "^1.8.1"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.9",
+    "@types/node": "^26.2.0",
     "@types/turndown": "^5.0.6",
     "bumpp": "^12.2.1",
     "tsdown": "^0.22.14",

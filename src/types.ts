@@ -28,6 +28,7 @@ export type ConverterOptions = {
   idPrefix?: string;
   transformDocument?: (element: unknown) => unknown;
   _parent_converters?: DocumentConverter[];
+  debug?: boolean;
 };
 
 export interface DocumentConverter {

@@ -15,13 +15,15 @@ export class HtmlConverter implements DocumentConverter {
 
   async convertHtml(html: string): Promise<ConverterResult> {
     const document = parseHtmlDocument(html);
-    document.querySelectorAll("script, style").forEach((element) => {
+
+    const title = document.title;
+    document.querySelectorAll("script, style, title").forEach((element) => {
       element.remove();
     });
 
-    const markdown = new CustomTurnDown().convertSoup(document.body ?? document);
+    const markdown = new CustomTurnDown().convertSoup(document);
     return {
-      title: document.title || null,
+      title: title || null,
       markdown,
       text_content: markdown
     };

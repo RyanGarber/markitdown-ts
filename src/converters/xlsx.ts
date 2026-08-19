@@ -1,7 +1,9 @@
-import { type Cell, Workbook, type Worksheet } from "exceljs";
+import ExcelJS, { type Cell, type Worksheet } from "exceljs";
 import { toArrayBuffer } from "../bytes";
 import type { ConverterOptions, ConverterResult } from "../types";
 import { HtmlConverter } from "./html";
+
+const { Workbook } = ExcelJS;
 
 export class XlsxConverter extends HtmlConverter {
   async convert(source: Uint8Array, options: ConverterOptions): Promise<ConverterResult> {

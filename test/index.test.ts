@@ -1,7 +1,9 @@
-import { Workbook } from "exceljs";
+import ExcelJS from "exceljs";
 import { zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { MarkItDown } from "../src";
+
+const { Workbook } = ExcelJS;
 
 const encoder = new TextEncoder();
 
