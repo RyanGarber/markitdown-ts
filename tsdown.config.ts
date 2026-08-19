@@ -8,5 +8,5 @@ export default defineConfig({
   sourcemap: true,
   treeshake: true,
   target: "es2020",
-  platform: "browser"
+  platform: "neutral"
 });

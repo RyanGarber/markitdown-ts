@@ -1,6 +1,6 @@
 # markitdown-ts
 
-`markitdown-ts` converts web-native document data to Markdown without filesystem, process, stream, or other runtime-specific dependencies. It is designed for browsers, workers, edge functions, and all other modern JavaScript environments.
+`markitdown-ts` converts various file types to Markdown without filesystem, process, stream, or any other runtime-specific dependencies. It can run in browsers, workers, edge functions, and all other modern JavaScript environments.
 
 ## Supported formats
 
@@ -14,23 +14,21 @@
 - ZIP archives (`.zip`), with nested files converted recursively
 - Wikipedia, YouTube metadata, and Bing result pages supplied as HTML
 
-Audio, image metadata, local-path, and YouTube transcript features from the original project are intentionally not included because their implementations depended on runtime-specific modules, binaries, streams, or filesystem access.
-They may be added back over time as alternative implementations are found. Want to see one added? Contributions are welcome!
+Audio, image metadata, local-path, and YouTube transcript features from the original project are intentionally left out because their implementations depended on runtime-specific modules, binaries, streams, or filesystem access. They may be added back over time as alternative implementations are found.  Want to see one added? Contributions are welcome!
 
 ## Installation
 
 ```sh
-npm install @ryangarber/markitdown-ts
+pnpm install @ryangarber/markitdown-ts
 ```
 
 ## Usage
 
-### `Uint8Array` (preferred)
-
 ```ts
-import { MarkItDown } from "markitdown-ts";
+import { MarkItDown } from "@ryangarber/markitdown-ts";
 
-const bytes = new TextEncoder().encode("Hello from the web");
+const bytes: Uint8Array = /* plain bytes */;
+
 const result = await new MarkItDown().convert(bytes, {
   file_extension: ".txt"
 });
@@ -38,14 +36,11 @@ const result = await new MarkItDown().convert(bytes, {
 console.log(result?.markdown);
 ```
 
-Any `Uint8Array` subclass is accepted as well. This keeps byte data from other modern JavaScript runtimes interoperable without requiring runtime-specific types.
-
-### Other in-memory sources
-
 The same `convert` method accepts:
 
+- `Uint8Array`
 - `ArrayBuffer` and `SharedArrayBuffer`
-- Any typed array or `DataView`
+- `DataView` or any other typed array 
 - `Blob` and `File`
 - `Response`
 
@@ -105,4 +100,5 @@ Biome handles both formatting and linting. `tsup` produces ESM, CommonJS, source
 
 ## License
 
+MIT License © 2026 Ryan Garber\
 MIT License © 2024 Vaibhav Raj
