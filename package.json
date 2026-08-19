@@ -8,7 +8,9 @@
     "browser",
     "uint8array",
     "docx",
-    "xlsx"
+    "pdf",
+    "xlsx",
+    "zip"
   ],
   "homepage": "https://github.com/ryangarber/markitdown-ts#readme",
   "bugs": {
@@ -62,9 +64,11 @@
   "dependencies": {
     "@joplin/turndown-plugin-gfm": "^1.0.67",
     "@xmldom/xmldom": "^0.9.11",
+    "fflate": "^0.8.3",
     "linkedom": "^0.18.13",
     "mammoth": "^1.12.1",
     "turndown": "^7.2.4",
+    "unpdf": "^1.8.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {

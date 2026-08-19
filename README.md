@@ -10,9 +10,12 @@
 - Jupyter notebooks (`.ipynb`)
 - Word documents (`.docx`)
 - Excel workbooks (`.xlsx`)
+- PDF documents (`.pdf`)
+- ZIP archives (`.zip`), with nested files converted recursively
 - Wikipedia, YouTube metadata, and Bing result pages supplied as HTML
 
-PDF, archive, audio, image metadata, local-path, and YouTube transcript features from the original project are intentionally not included because their implementations depended on runtime-specific modules, binaries, streams, or filesystem access.
+Audio, image metadata, local-path, and YouTube transcript features from the original project are intentionally not included because their implementations depended on runtime-specific modules, binaries, streams, or filesystem access.
+They may be added back over time as alternative implementations are found. Want to see one added? Contributions are welcome!
 
 ## Installation
 

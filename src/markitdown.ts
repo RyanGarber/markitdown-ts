@@ -3,11 +3,13 @@ import { BingSerpConverter } from "./converters/bingserp";
 import { DocxConverter } from "./converters/docx";
 import { HtmlConverter } from "./converters/html";
 import { IpynbConverter } from "./converters/ipynb";
+import { PdfConverter } from "./converters/pdf";
 import { PlainTextConverter } from "./converters/plain-text";
 import { WikipediaConverter } from "./converters/wikipedia";
 import { XlsxConverter } from "./converters/xlsx";
 import { RSSConverter } from "./converters/xml-rss-atom";
 import { YouTubeConverter } from "./converters/youtube";
+import { ZipConverter } from "./converters/zip";
 import { extensionFromMime, extensionFromPathname } from "./mime";
 import type { ByteSource, ConverterOptions, ConverterResult, DocumentConverter } from "./types";
 
@@ -19,12 +21,14 @@ export class MarkItDown {
   constructor() {
     this.registerConverter(new PlainTextConverter());
     this.registerConverter(new HtmlConverter());
+    this.registerConverter(new ZipConverter());
     this.registerConverter(new RSSConverter());
     this.registerConverter(new WikipediaConverter());
     this.registerConverter(new YouTubeConverter());
     this.registerConverter(new BingSerpConverter());
     this.registerConverter(new DocxConverter());
     this.registerConverter(new XlsxConverter());
+    this.registerConverter(new PdfConverter());
     this.registerConverter(new IpynbConverter());
   }
 

@@ -1,7 +1,10 @@
 const MIME_EXTENSIONS: Record<string, string> = {
   "application/atom+xml": ".atom",
   "application/json": ".json",
+  "application/pdf": ".pdf",
+  "application/zip": ".zip",
   "application/rss+xml": ".rss",
+  "application/x-pdf": ".pdf",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
   "application/xml": ".xml",
