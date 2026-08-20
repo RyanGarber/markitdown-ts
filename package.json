@@ -10,6 +10,7 @@
     "docx",
     "pdf",
     "xlsx",
+    "pptx",
     "zip"
   ],
   "homepage": "https://github.com/ryangarber/markitdown-ts#readme",
@@ -67,11 +68,12 @@
   "dependencies": {
     "@commander-js/extra-typings": "^15.0.0",
     "@joplin/turndown-plugin-gfm": "^1.0.67",
+    "@jvmr/pptx-to-html": "^1.1.1",
     "@xmldom/xmldom": "^0.9.11",
-    "exceljs": "^4.4.0",
     "fflate": "^0.8.3",
     "linkedom": "^0.18.13",
     "mammoth": "^1.12.1",
+    "read-excel-file": "^9.3.10",
     "turndown": "^7.2.4",
     "unpdf": "^1.8.1"
   },

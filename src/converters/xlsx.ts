@@ -1,9 +1,7 @@
-import ExcelJS, { type Cell, type Worksheet } from "exceljs";
+import readExcelFile, { type SheetData } from "read-excel-file/universal";
 import { toArrayBuffer } from "../bytes";
 import type { ConverterOptions, ConverterResult } from "../types";
 import { HtmlConverter } from "./html";
-
-const { Workbook } = ExcelJS;
 
 export class XlsxConverter extends HtmlConverter {
   async convert(source: Uint8Array, options: ConverterOptions): Promise<ConverterResult> {
@@ -11,51 +9,52 @@ export class XlsxConverter extends HtmlConverter {
       return null;
     }
 
-    const workbook = new Workbook();
-    await workbook.xlsx.load(toArrayBuffer(source));
+    const sheets = await readExcelFile(toArrayBuffer(source));
     const sections: string[] = [];
 
-    for (const worksheet of workbook.worksheets) {
-      const html = worksheetToHtml(worksheet);
+    for (const { sheet, data } of sheets) {
+      const html = sheetToHtml(data);
       if (!html) {
         continue;
       }
       const result = await this.convertHtml(html);
-      sections.push(`## ${worksheet.name}\n${result?.markdown.trim() ?? ""}`);
+      sections.push(`## ${sheet}\n${result?.markdown.trim() ?? ""}`);
     }
 
     const markdown = sections.join("\n\n");
     return {
-      title: workbook.title || "Untitled",
+      title: null,
       markdown,
       text_content: markdown
     };
   }
 }
 
-function worksheetToHtml(worksheet: Worksheet): string {
-  const columnCount = worksheet.columnCount;
-  if (!columnCount || !worksheet.actualRowCount) {
+function sheetToHtml(rows: SheetData): string {
+  const columnCount = rows.reduce((max, row) => Math.max(max, row.length), 0);
+  if (!columnCount || rows.length === 0) {
     return "";
   }
 
-  const rows: string[] = [];
-  worksheet.eachRow({ includeEmpty: true }, (row) => {
+  const htmlRows = rows.map((row) => {
     const cells: string[] = [];
-    for (let column = 1; column <= columnCount; column++) {
-      cells.push(`<td>${escapeHtml(cellText(row.getCell(column)))}</td>`);
+    for (let column = 0; column < columnCount; column++) {
+      cells.push(`<td>${escapeHtml(cellText(row[column]))}</td>`);
     }
-    rows.push(`<tr>${cells.join("")}</tr>`);
+    return `<tr>${cells.join("")}</tr>`;
   });
 
-  return `<html><body><table>${rows.join("")}</table></body></html>`;
+  return `<html><body><table>${htmlRows.join("")}</table></body></html>`;
 }
 
-function cellText(cell: Cell): string {
-  if (cell.isMerged && cell.master !== cell) {
+function cellText(value: unknown): string {
+  if (value == null) {
     return "";
   }
-  return cell.text;
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  return String(value);
 }
 
 function escapeHtml(value: string): string {

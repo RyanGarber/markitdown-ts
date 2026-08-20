@@ -5,6 +5,7 @@ const MIME_EXTENSIONS: Record<string, string> = {
   "application/zip": ".zip",
   "application/rss+xml": ".rss",
   "application/x-pdf": ".pdf",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
   "application/xml": ".xml",

@@ -1,15 +1,27 @@
 import { defineConfig } from "tsdown";
 
+const libraryBuild = {
+  entry: ["src/index.ts"],
+  dts: true,
+  sourcemap: true,
+  treeshake: true,
+  target: "es2020",
+  platform: "neutral"
+} as const;
+
 export default defineConfig([
   {
-    entry: ["src/index.ts"],
-    format: ["esm", "cjs"],
-    dts: true,
-    clean: true,
-    sourcemap: true,
-    treeshake: true,
-    target: "es2020",
-    platform: "neutral"
+    ...libraryBuild,
+    format: ["esm"],
+    clean: true
+  },
+  {
+    ...libraryBuild,
+    format: ["cjs"],
+    clean: false,
+    deps: {
+      alwaysBundle: ["@jvmr/pptx-to-html"]
+    }
   },
   {
     entry: ["src/cli.ts"],

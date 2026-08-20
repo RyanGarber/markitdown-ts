@@ -5,6 +5,7 @@ import { HtmlConverter } from "./converters/html";
 import { IpynbConverter } from "./converters/ipynb";
 import { PdfConverter } from "./converters/pdf";
 import { PlainTextConverter } from "./converters/plain-text";
+import { PptxConverter } from "./converters/pptx";
 import { WikipediaConverter } from "./converters/wikipedia";
 import { XlsxConverter } from "./converters/xlsx";
 import { RSSConverter } from "./converters/xml-rss-atom";
@@ -28,6 +29,7 @@ export class MarkItDown {
     this.registerConverter(new BingSerpConverter());
     this.registerConverter(new DocxConverter());
     this.registerConverter(new XlsxConverter());
+    this.registerConverter(new PptxConverter());
     this.registerConverter(new PdfConverter());
     this.registerConverter(new IpynbConverter());
   }

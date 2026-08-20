@@ -1,9 +1,6 @@
-import ExcelJS from "exceljs";
 import { zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { MarkItDown } from "../src";
-
-const { Workbook } = ExcelJS;
 
 const encoder = new TextEncoder();
 
@@ -97,15 +94,44 @@ describe("MarkItDown", () => {
   });
 
   it("converts spreadsheets from Uint8Array", async () => {
-    const workbook = new Workbook();
-    const sheet = workbook.addWorksheet("Sheet");
-    sheet.addRow(["name", "value"]);
-    sheet.addRow(["browser", 1]);
-    const bytes = new Uint8Array(await workbook.xlsx.writeBuffer());
-    const result = await new MarkItDown().convert(bytes, { file_extension: ".xlsx" });
+    const result = await new MarkItDown().convert(createXlsx(), { file_extension: ".xlsx" });
 
     expect(result?.markdown).toContain("## Sheet");
     expect(result?.markdown).toContain("browser");
+  });
+
+  it("infers spreadsheet format from response headers", async () => {
+    const result = await new MarkItDown().convert(
+      new Response(createXlsx(), {
+        headers: {
+          "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        }
+      })
+    );
+
+    expect(result?.markdown).toContain("browser");
+  });
+
+  it("converts presentations from Uint8Array", async () => {
+    const result = await new MarkItDown().convert(createPptx("Hello from PPTX"), {
+      file_extension: ".pptx"
+    });
+
+    expect(result?.markdown).toContain("<!-- Slide number: 1 -->");
+    expect(result?.markdown).toContain("Hello from PPTX");
+  });
+
+  it("infers presentation format from response headers", async () => {
+    const result = await new MarkItDown().convert(
+      new Response(createPptx("response pptx"), {
+        headers: {
+          "content-type":
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        }
+      })
+    );
+
+    expect(result?.markdown).toContain("response pptx");
   });
 
   it("converts zip archives from Uint8Array", async () => {
@@ -180,6 +206,142 @@ describe("MarkItDown", () => {
     );
   });
 });
+
+function createXlsx(): Uint8Array<ArrayBuffer> {
+  return zipOfficeDocument({
+    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>`,
+    "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`,
+    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Sheet" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>`,
+    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>`,
+    "xl/worksheets/sheet1.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>
+    <row r="1">
+      <c r="A1" t="inlineStr"><is><t>name</t></is></c>
+      <c r="B1" t="inlineStr"><is><t>value</t></is></c>
+    </row>
+    <row r="2">
+      <c r="A2" t="inlineStr"><is><t>browser</t></is></c>
+      <c r="B2"><v>1</v></c>
+    </row>
+  </sheetData>
+</worksheet>`
+  });
+}
+
+function createPptx(text: string): Uint8Array<ArrayBuffer> {
+  const presentationNs = "http://schemas.openxmlformats.org/presentationml/2006/main";
+  const drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+  const relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+  const contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+  return zipOfficeDocument({
+    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="${contentTypesNs}">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+  <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+</Types>`,
+    "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="${packageRelNs}">
+  <Relationship Id="rId1" Type="${relNs}/officeDocument" Target="ppt/presentation.xml"/>
+</Relationships>`,
+    "ppt/presentation.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:presentation xmlns:a="${drawingNs}" xmlns:r="${relNs}" xmlns:p="${presentationNs}">
+  <p:sldMasterIdLst/>
+  <p:sldIdLst>
+    <p:sldId id="256" r:id="rId1"/>
+  </p:sldIdLst>
+  <p:sldSz cx="12192000" cy="6858000"/>
+  <p:notesSz cx="6858000" cy="9144000"/>
+</p:presentation>`,
+    "ppt/_rels/presentation.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="${packageRelNs}">
+  <Relationship Id="rId1" Type="${relNs}/slide" Target="slides/slide1.xml"/>
+</Relationships>`,
+    "ppt/slides/_rels/slide1.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="${packageRelNs}"/>`,
+    "ppt/slides/slide1.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="${drawingNs}" xmlns:r="${relNs}" xmlns:p="${presentationNs}">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr>
+        <p:cNvPr id="1" name=""/>
+        <p:cNvGrpSpPr/>
+        <p:nvPr/>
+      </p:nvGrpSpPr>
+      <p:grpSpPr>
+        <a:xfrm>
+          <a:off x="0" y="0"/>
+          <a:ext cx="0" cy="0"/>
+          <a:chOff x="0" y="0"/>
+          <a:chExt cx="0" cy="0"/>
+        </a:xfrm>
+      </p:grpSpPr>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="2" name="Title"/>
+          <p:cNvSpPr txBox="1"/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="457200" y="457200"/>
+            <a:ext cx="10972800" cy="1371600"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:lstStyle/>
+          <a:p>
+            <a:r>
+              <a:t>${escapeXml(text)}</a:t>
+            </a:r>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+    </p:spTree>
+  </p:cSld>
+</p:sld>`
+  });
+}
+
+function zipOfficeDocument(files: Record<string, string>): Uint8Array<ArrayBuffer> {
+  const entries: Record<string, Uint8Array> = {};
+  for (const [name, contents] of Object.entries(files)) {
+    entries[name] = encoder.encode(contents);
+  }
+  return zipSync(entries);
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
 
 function createPdf(text: string, title?: string): ArrayBuffer {
   const stream = `BT /F1 12 Tf 72 720 Td (${escapePdfString(text)}) Tj ET`;

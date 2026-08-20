@@ -10,6 +10,7 @@
 - Jupyter notebooks (`.ipynb`)
 - Word documents (`.docx`)
 - Excel workbooks (`.xlsx`)
+- PowerPoint presentations (`.pptx`)
 - PDF documents (`.pdf`)
 - ZIP archives (`.zip`), with nested files converted recursively
 - Wikipedia, YouTube metadata, and Bing result pages supplied as HTML
